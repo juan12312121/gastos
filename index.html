@@ -5,19 +5,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Control de Gastos - Responsive (Gráficas derecha en desktop)</title>
 
-  <!-- Tailwind CSS (CDN) -->
   <script src="https://cdn.tailwindcss.com"></script>
 
-  <!-- Tabulator CSS (table interactive) -->
   <link href="https://unpkg.com/tabulator-tables@5.5.0/dist/css/tabulator.min.css" rel="stylesheet">
 
-  <!-- Flatpickr CSS -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
 
-  <!-- SweetAlert2 CSS -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
 
-  <style>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" integrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A==" crossorigin="anonymous" referrerpolicy="no-referrer" />  <style>
     /* Custom styles to complement Tailwind */
     :root{
       --bg: #f8fafc;
@@ -43,7 +39,6 @@
 <body class="antialiased text-slate-900">
 
   <div class="max-w-7xl mx-auto p-4 lg:p-6">
-    <!-- HEADER -->
     <header class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
       <div>
         <div class="inline-block bg-gradient-to-r from-indigo-50 to-sky-50 text-indigo-700 px-3 py-1 rounded-full font-semibold mb-1">Mi Presupuesto</div>
@@ -52,26 +47,20 @@
       </div>
 
       <div class="flex flex-wrap gap-2">
-        <button id="btnAdd" class="px-4 py-2 bg-indigo-600 text-white rounded-lg font-semibold shadow-sm hover:bg-indigo-700">➕ Nuevo</button>
-        <button id="btnSample" class="px-4 py-2 border rounded-lg font-semibold hover:bg-slate-50">Ejemplo</button>
-        <button id="btnExport" class="px-4 py-2 border rounded-lg font-semibold hover:bg-slate-50">📤 Exportar</button>
+        <button id="btnAdd" class="px-4 py-2 bg-indigo-600 text-white rounded-lg font-semibold shadow-sm hover:bg-indigo-700 flex items-center gap-2"><i class="fas fa-plus-circle"></i> Nuevo</button>
+        <button id="btnSample" class="px-4 py-2 border rounded-lg font-semibold hover:bg-slate-50 flex items-center gap-2"><i class="fas fa-seedling"></i> Ejemplo</button>
+        <button id="btnExport" class="px-4 py-2 border rounded-lg font-semibold hover:bg-slate-50 flex items-center gap-2"><i class="fas fa-file-export"></i> Exportar</button>
         <label class="px-4 py-2 border rounded-lg font-semibold cursor-pointer hover:bg-slate-50 flex items-center gap-2">
-          📁 Importar
+          <i class="fas fa-file-import"></i> Importar
           <input id="fileImport" type="file" accept=".xlsx,.xls,.csv" class="hidden">
         </label>
       </div>
     </header>
 
-    <!-- LAYOUT:
-         - On mobile / small: charts stack ABOVE the table.
-         - On lg (>=1024px): table on left, charts on right.
-    -->
     <main class="grid grid-cols-1 lg:grid-cols-3 gap-4">
 
-      <!-- LEFT: filters + table (spans 2 columns on large) -->
       <section class="lg:col-span-2 space-y-4">
 
-        <!-- FILTERS -->
         <div class="card p-4 rounded-lg bg-white shadow-sm">
           <div class="flex flex-col sm:flex-row sm:items-center gap-2">
             <div class="flex gap-2 flex-wrap">
@@ -96,7 +85,6 @@
           </div>
         </div>
 
-        <!-- TABLE CARD -->
         <div class="card p-0 rounded-lg bg-white shadow-sm">
           <div class="p-4 border-b">
             <div class="flex items-center justify-between">
@@ -106,8 +94,7 @@
           </div>
 
           <div class="table-scroll p-4" id="table" style="min-height:220px;">
-            <!-- Tabulator will render here (or fallback table) -->
-          </div>
+            </div>
 
           <div class="p-4 border-t flex items-center justify-between text-sm muted">
             <div>Atajos: <strong>n</strong> = nuevo • <strong>e</strong> = exportar</div>
@@ -117,16 +104,8 @@
 
       </section>
 
-      <!-- RIGHT: charts (stack on mobile above the table via order) -->
       <aside class="space-y-4">
 
-        <!-- On small screens we want charts above table; use order classes:
-             We'll rely on DOM order: because main is grid with single column on mobile,
-             the charts (aside) will appear after the left section; to show charts above on mobile,
-             we place an extra charts block that is hidden on lg. Simpler approach: duplicate charts containers:
-             - chartsTop: visible on small (sm:hidden lg:block?), but to avoid duplication we'll use CSS order:
-             Use Tailwind order: on mobile, order-first for charts. We'll wrap accordingly.
-        -->
         <div class="card p-4 rounded-lg bg-white shadow-sm lg:sticky lg:top-6">
           <div class="mb-3">
             <div class="text-sm muted">Total gastos</div>
@@ -170,14 +149,12 @@
     </section>
   </div>
 
-  <!-- LIBS: Chart.js, Flatpickr, SweetAlert2, SheetJS, FileSaver -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.3.0/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
 
-  <!-- Load Tabulator dynamically (attempt multiple CDNs) -->
   <script>
     const TABULATOR_CDNS = [
       'https://unpkg.com/tabulator-tables@5.5.0/dist/js/tabulator_min.js',
@@ -193,7 +170,6 @@
     }
   </script>
 
-  <!-- APPLICATION -->
   <script>
   (async function main(){
     const tabOk = await ensureTabulator();
@@ -247,8 +223,8 @@
           {title:'Acciones', field:'id', hozAlign:'center', width:160, formatter: function(cell){
             const id = cell.getValue();
             return `<div class="flex items-center justify-center gap-2">
-                      <button data-id="${id}" class="px-2 py-1 rounded bg-sky-500 text-white">Editar</button>
-                      <button data-id="${id}" class="px-2 py-1 rounded bg-red-500 text-white">Borrar</button>
+                      <button data-id="${id}" class="px-2 py-1 rounded bg-sky-500 text-white"><i class="fas fa-pen-to-square"></i></button>
+                      <button data-id="${id}" class="px-2 py-1 rounded bg-red-500 text-white"><i class="fas fa-trash-alt"></i></button>
                     </div>`;
           }}
         ]
@@ -296,8 +272,8 @@
                             <td>${escapeHtml(r.description||'')}</td>
                             <td style="text-align:right">$${Number(r.amount||0).toFixed(2)}</td>
                             <td style="text-align:center">
-                              <button data-id="${r.id}" class="action-edit px-2 py-1 rounded bg-sky-500 text-white">Editar</button>
-                              <button data-id="${r.id}" class="action-del px-2 py-1 rounded bg-red-500 text-white ml-2">Borrar</button>
+                              <button data-id="${r.id}" class="action-edit px-2 py-1 rounded bg-sky-500 text-white"><i class="fas fa-pen-to-square"></i></button>
+                              <button data-id="${r.id}" class="action-del px-2 py-1 rounded bg-red-500 text-white ml-2"><i class="fas fa-trash-alt"></i></button>
                             </td>`;
             fallback.tbody.appendChild(tr);
           }
