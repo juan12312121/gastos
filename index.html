@@ -1,0 +1,550 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Control de Gastos - Responsive (Gráficas derecha en desktop)</title>
+
+  <!-- Tailwind CSS (CDN) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Tabulator CSS (table interactive) -->
+  <link href="https://unpkg.com/tabulator-tables@5.5.0/dist/css/tabulator.min.css" rel="stylesheet">
+
+  <!-- Flatpickr CSS -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+
+  <!-- SweetAlert2 CSS -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
+
+  <style>
+    /* Custom styles to complement Tailwind */
+    :root{
+      --bg: #f8fafc;
+      --card: #ffffff;
+      --muted: #6b7280;
+      --accent: #4f46e5;
+      --danger: #ef4444;
+    }
+    body{background:var(--bg);-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;}
+    /* Ensure Tabulator uses the same font-size */
+    .tabulator{font-family:inherit;font-size:0.95rem;}
+    /* Make chart containers have a fixed-ish height but responsive */
+    .chart-container { height: 240px; width: 100%; }
+    @media(min-width:1024px){
+      .chart-container { height: 300px; }
+    }
+    /* Ensure table scroll on small screens */
+    .table-scroll { overflow: auto; -webkit-overflow-scrolling: touch; }
+    /* Small helper */
+    .muted { color: var(--muted); }
+  </style>
+</head>
+<body class="antialiased text-slate-900">
+
+  <div class="max-w-7xl mx-auto p-4 lg:p-6">
+    <!-- HEADER -->
+    <header class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
+      <div>
+        <div class="inline-block bg-gradient-to-r from-indigo-50 to-sky-50 text-indigo-700 px-3 py-1 rounded-full font-semibold mb-1">Mi Presupuesto</div>
+        <h1 class="text-2xl md:text-3xl font-extrabold">Control de Gastos Diarios</h1>
+        <p class="text-sm muted">Responsive — gráficos arriba en móviles, a la derecha en pantallas grandes.</p>
+      </div>
+
+      <div class="flex flex-wrap gap-2">
+        <button id="btnAdd" class="px-4 py-2 bg-indigo-600 text-white rounded-lg font-semibold shadow-sm hover:bg-indigo-700">➕ Nuevo</button>
+        <button id="btnSample" class="px-4 py-2 border rounded-lg font-semibold hover:bg-slate-50">Ejemplo</button>
+        <button id="btnExport" class="px-4 py-2 border rounded-lg font-semibold hover:bg-slate-50">📤 Exportar</button>
+        <label class="px-4 py-2 border rounded-lg font-semibold cursor-pointer hover:bg-slate-50 flex items-center gap-2">
+          📁 Importar
+          <input id="fileImport" type="file" accept=".xlsx,.xls,.csv" class="hidden">
+        </label>
+      </div>
+    </header>
+
+    <!-- LAYOUT:
+         - On mobile / small: charts stack ABOVE the table.
+         - On lg (>=1024px): table on left, charts on right.
+    -->
+    <main class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+
+      <!-- LEFT: filters + table (spans 2 columns on large) -->
+      <section class="lg:col-span-2 space-y-4">
+
+        <!-- FILTERS -->
+        <div class="card p-4 rounded-lg bg-white shadow-sm">
+          <div class="flex flex-col sm:flex-row sm:items-center gap-2">
+            <div class="flex gap-2 flex-wrap">
+              <input id="filterStart" placeholder="Inicio (YYYY-MM-DD)" class="px-3 py-2 border rounded w-44" />
+              <input id="filterEnd" placeholder="Fin (YYYY-MM-DD)" class="px-3 py-2 border rounded w-44" />
+              <select id="filterCategory" class="px-3 py-2 border rounded">
+                <option value="">Todas las categorías</option>
+                <option>Alimentos</option>
+                <option>Transporte</option>
+                <option>Hogar</option>
+                <option>Ocio</option>
+                <option>Salud</option>
+                <option>Otros</option>
+              </select>
+              <input id="filterText" placeholder="Buscar descripción..." class="px-3 py-2 border rounded w-full sm:w-64" />
+            </div>
+
+            <div class="ml-auto flex gap-2">
+              <button id="btnFilter" class="px-3 py-2 bg-slate-100 rounded font-semibold hover:bg-slate-200">Filtrar</button>
+              <button id="btnClearFilter" class="px-3 py-2 bg-slate-50 rounded font-semibold hover:bg-slate-100">Limpiar</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- TABLE CARD -->
+        <div class="card p-0 rounded-lg bg-white shadow-sm">
+          <div class="p-4 border-b">
+            <div class="flex items-center justify-between">
+              <div class="font-semibold">Lista de gastos</div>
+              <div class="text-sm muted">Guardado en localStorage</div>
+            </div>
+          </div>
+
+          <div class="table-scroll p-4" id="table" style="min-height:220px;">
+            <!-- Tabulator will render here (or fallback table) -->
+          </div>
+
+          <div class="p-4 border-t flex items-center justify-between text-sm muted">
+            <div>Atajos: <strong>n</strong> = nuevo • <strong>e</strong> = exportar</div>
+            <div id="summaryCount">0 registros</div>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- RIGHT: charts (stack on mobile above the table via order) -->
+      <aside class="space-y-4">
+
+        <!-- On small screens we want charts above table; use order classes:
+             We'll rely on DOM order: because main is grid with single column on mobile,
+             the charts (aside) will appear after the left section; to show charts above on mobile,
+             we place an extra charts block that is hidden on lg. Simpler approach: duplicate charts containers:
+             - chartsTop: visible on small (sm:hidden lg:block?), but to avoid duplication we'll use CSS order:
+             Use Tailwind order: on mobile, order-first for charts. We'll wrap accordingly.
+        -->
+        <div class="card p-4 rounded-lg bg-white shadow-sm lg:sticky lg:top-6">
+          <div class="mb-3">
+            <div class="text-sm muted">Total gastos</div>
+            <div id="totalAmount" class="text-2xl font-extrabold mt-1">$0.00</div>
+          </div>
+
+          <div class="mb-4">
+            <div class="text-sm muted mb-2">Gastos por categoría</div>
+            <div class="chart-container chart-container h-48 lg:h-56">
+              <canvas id="chartCategory" class="w-full h-full"></canvas>
+            </div>
+          </div>
+
+          <div>
+            <div class="text-sm muted mb-2">Tendencia (últimos 30 días)</div>
+            <div class="chart-container chart-container h-36 lg:h-44">
+              <canvas id="chartTrend" class="w-full h-full"></canvas>
+            </div>
+          </div>
+
+          <div class="mt-4 border-t pt-3 flex gap-2">
+            <button id="btnDownloadJson" class="px-3 py-2 border rounded w-full text-sm">Descargar JSON</button>
+            <label class="px-3 py-2 border rounded w-full text-sm text-center cursor-pointer">Restaurar
+              <input id="fileRestore" type="file" accept="application/json" class="hidden" />
+            </label>
+          </div>
+        </div>
+
+      </aside>
+    </main>
+
+    <section class="mt-4 text-sm muted">
+      <div class="card p-4">
+        <h3 class="font-semibold">Notas rápidas</h3>
+        <ul class="list-disc ml-6 mt-2">
+          <li>Importar Excel espera columnas: <code>Fecha, Categoria, Descripcion, Monto</code>.</li>
+          <li>Formato fecha: <code>YYYY-MM-DD</code>. Flatpickr facilita la selección en modales.</li>
+          <li>Si Tabulator no carga por restricción de red, hay un fallback nativo con tabla HTML.</li>
+        </ul>
+      </div>
+    </section>
+  </div>
+
+  <!-- LIBS: Chart.js, Flatpickr, SweetAlert2, SheetJS, FileSaver -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.3.0/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
+
+  <!-- Load Tabulator dynamically (attempt multiple CDNs) -->
+  <script>
+    const TABULATOR_CDNS = [
+      'https://unpkg.com/tabulator-tables@5.5.0/dist/js/tabulator_min.js',
+      'https://cdn.jsdelivr.net/npm/tabulator-tables@5.5.0/dist/js/tabulator_min.js'
+    ];
+    function loadScript(url){ return new Promise((res,rej)=>{ const s=document.createElement('script'); s.src=url; s.async=true; s.onload=()=>res(url); s.onerror=()=>rej(url); document.head.appendChild(s); }); }
+    async function ensureTabulator(){
+      if(window.Tabulator) return true;
+      for(const u of TABULATOR_CDNS){
+        try{ await loadScript(u); if(window.Tabulator) return true; } catch(e){ console.warn('Tabulator CDN fail', u); }
+      }
+      return false;
+    }
+  </script>
+
+  <!-- APPLICATION -->
+  <script>
+  (async function main(){
+    const tabOk = await ensureTabulator();
+    if(!tabOk){
+      console.warn('Tabulator not available, using fallback table.');
+      if(window.Swal) Swal.fire('Aviso','Tabulator no se pudo cargar; se usará una tabla nativa como fallback.','info');
+      window.__TAB_MISSING = true;
+    }
+
+    // App state
+    const STORAGE_KEY = 'control_gastos_responsive_v2';
+    let gastos = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+
+    // DOM refs
+    const elTable = document.getElementById('table');
+    const elFilterStart = document.getElementById('filterStart');
+    const elFilterEnd = document.getElementById('filterEnd');
+    const elFilterCategory = document.getElementById('filterCategory');
+    const elFilterText = document.getElementById('filterText');
+    const elTotal = document.getElementById('totalAmount');
+    const elCount = document.getElementById('summaryCount');
+    const chartCatCtx = document.getElementById('chartCategory').getContext('2d');
+    const chartTrendCtx = document.getElementById('chartTrend').getContext('2d');
+
+    // Charts instances
+    let chartCategory = null;
+    let chartTrend = null;
+
+    // Table wrapper (Tabulator or fallback)
+    let tableWrapper = null;
+    let tabulatorInstance = null;
+
+    // Init flatpickr inputs (filters) if available
+    if(window.flatpickr){
+      flatpickr('#filterStart',{dateFormat:'Y-m-d', allowInput:true});
+      flatpickr('#filterEnd',{dateFormat:'Y-m-d', allowInput:true});
+    }
+
+    // Create table (Tabulator or fallback)
+    if(window.Tabulator && !window.__TAB_MISSING){
+      tabulatorInstance = new Tabulator('#table', {
+        layout: 'fitColumns',
+        placeholder: 'No hay gastos registrados',
+        reactiveData: true,
+        height: '420px',
+        columns: [
+          {title:'Fecha', field:'date', width:120},
+          {title:'Categoría', field:'category', width:130},
+          {title:'Descripción', field:'description'},
+          {title:'Monto', field:'amount', hozAlign:'right', formatter: function(cell){ return `$${Number(cell.getValue()||0).toFixed(2)}`; }},
+          {title:'Acciones', field:'id', hozAlign:'center', width:160, formatter: function(cell){
+            const id = cell.getValue();
+            return `<div class="flex items-center justify-center gap-2">
+                      <button data-id="${id}" class="px-2 py-1 rounded bg-sky-500 text-white">Editar</button>
+                      <button data-id="${id}" class="px-2 py-1 rounded bg-red-500 text-white">Borrar</button>
+                    </div>`;
+          }}
+        ]
+      });
+      tableWrapper = {
+        replaceData: (data) => tabulatorInstance.replaceData(data),
+        destroy: () => { try{ tabulatorInstance.destroy(); } catch(e){} }
+      };
+      // delegate click handling on the table wrapper
+      elTable.addEventListener('click', function(e){
+        const btn = e.target.closest('button[data-id]');
+        if(!btn) return;
+        const id = Number(btn.dataset.id);
+        if(btn.innerText && btn.innerText.toLowerCase().includes('editar')) openEditModal(id);
+        if(btn.innerText && btn.innerText.toLowerCase().includes('borrar')) confirmDelete(id);
+      });
+    } else {
+      // fallback: simple HTML table with scroll
+      function buildFallback(){
+        elTable.innerHTML = '';
+        const wrap = document.createElement('div');
+        wrap.className = 'overflow-auto';
+        const table = document.createElement('table');
+        table.className = 'fallback-table w-full';
+        const thead = document.createElement('thead');
+        thead.innerHTML = `<tr>
+          <th style="width:110px">Fecha</th>
+          <th style="width:120px">Categoría</th>
+          <th>Descripción</th>
+          <th style="width:120px;text-align:right">Monto</th>
+          <th style="width:160px">Acciones</th>
+        </tr>`;
+        const tbody = document.createElement('tbody');
+        table.appendChild(thead); table.appendChild(tbody); wrap.appendChild(table); elTable.appendChild(wrap);
+        return {tbody};
+      }
+      const fallback = buildFallback();
+      tableWrapper = {
+        replaceData: (data) => {
+          fallback.tbody.innerHTML = '';
+          for(const r of data){
+            const tr = document.createElement('tr');
+            tr.innerHTML = `<td>${escapeHtml(r.date||'')}</td>
+                            <td>${escapeHtml(r.category||'')}</td>
+                            <td>${escapeHtml(r.description||'')}</td>
+                            <td style="text-align:right">$${Number(r.amount||0).toFixed(2)}</td>
+                            <td style="text-align:center">
+                              <button data-id="${r.id}" class="action-edit px-2 py-1 rounded bg-sky-500 text-white">Editar</button>
+                              <button data-id="${r.id}" class="action-del px-2 py-1 rounded bg-red-500 text-white ml-2">Borrar</button>
+                            </td>`;
+            fallback.tbody.appendChild(tr);
+          }
+        },
+        destroy: ()=>{ elTable.innerHTML = ''; }
+      };
+      // delegate clicks
+      elTable.addEventListener('click', function(e){
+        const btn = e.target.closest('button[data-id]');
+        if(!btn) return;
+        const id = Number(btn.dataset.id);
+        if(btn.classList.contains('action-edit')) openEditModal(id);
+        if(btn.classList.contains('action-del')) confirmDelete(id);
+      });
+    }
+
+    // Wire controls
+    document.getElementById('btnAdd').addEventListener('click', openAddModal);
+    document.getElementById('btnSample').addEventListener('click', loadSampleData);
+    document.getElementById('btnExport').addEventListener('click', exportToExcel);
+    document.getElementById('fileImport').addEventListener('change', handleImport);
+    document.getElementById('btnFilter').addEventListener('click', renderAll);
+    document.getElementById('btnClearFilter').addEventListener('click', () => { elFilterStart.value=''; elFilterEnd.value=''; elFilterCategory.value=''; elFilterText.value=''; renderAll(); });
+    document.getElementById('btnDownloadJson').addEventListener('click', downloadJson);
+    document.getElementById('fileRestore').addEventListener('change', restoreFromJson);
+
+    // Keyboard shortcuts
+    window.addEventListener('keydown', (e)=>{ if(e.key==='n') openAddModal(); if(e.key==='e') exportToExcel(); });
+
+    // CRUD and persistence
+    function save(){
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(gastos));
+      renderAll();
+    }
+    function addGasto(g){
+      g.id = Date.now() + Math.floor(Math.random()*10000);
+      gastos.push(g);
+      save();
+    }
+    function updateGasto(id, newData){
+      const i = gastos.findIndex(x=>x.id===id);
+      if(i>-1){ gastos[i] = {...gastos[i], ...newData}; save(); }
+    }
+    function deleteGasto(id){
+      gastos = gastos.filter(x=>x.id!==id);
+      save();
+    }
+
+    function getFilteredData(){
+      const s = elFilterStart.value;
+      const e = elFilterEnd.value;
+      const c = elFilterCategory.value;
+      const q = (elFilterText.value || '').toLowerCase().trim();
+      let data = [...gastos];
+      if(s) data = data.filter(d => d.date >= s);
+      if(e) data = data.filter(d => d.date <= e);
+      if(c) data = data.filter(d => d.category === c);
+      if(q) data = data.filter(d => (d.description || '').toLowerCase().includes(q) || (d.category || '').toLowerCase().includes(q));
+      return data.sort((a,b)=> b.date.localeCompare(a.date));
+    }
+
+    function renderAll(){
+      const data = getFilteredData();
+      tableWrapper.replaceData(data);
+      const total = data.reduce((s,x)=> s + Number(x.amount || 0), 0);
+      elTotal.innerText = `$${total.toFixed(2)}`;
+      elCount.innerText = `${data.length} registros`;
+      updateCategoryChart();
+      updateTrendChart();
+    }
+
+    // Modals (SweetAlert2)
+    function getFormHtml(g = {}){
+      const date = g.date || '';
+      const amount = (g.amount !== undefined && g.amount !== null) ? g.amount : '';
+      const desc = g.description || '';
+      const cat = g.category || 'Otros';
+      return `
+        <div class="text-left">
+          <label class="block text-sm text-slate-500">Fecha</label>
+          <input id="g_date" type="date" value="${date}" class="w-full border rounded px-2 py-2 mt-1" />
+          <label class="block text-sm text-slate-500 mt-3">Categoría</label>
+          <select id="g_category" class="w-full border rounded px-2 py-2 mt-1">
+            <option ${cat==='Alimentos'?'selected':''}>Alimentos</option>
+            <option ${cat==='Transporte'?'selected':''}>Transporte</option>
+            <option ${cat==='Hogar'?'selected':''}>Hogar</option>
+            <option ${cat==='Ocio'?'selected':''}>Ocio</option>
+            <option ${cat==='Salud'?'selected':''}>Salud</option>
+            <option ${cat==='Otros'?'selected':''}>Otros</option>
+          </select>
+          <label class="block text-sm text-slate-500 mt-3">Monto</label>
+          <input id="g_amount" type="number" step="0.01" value="${amount}" class="w-full border rounded px-2 py-2 mt-1" />
+          <label class="block text-sm text-slate-500 mt-3">Descripción</label>
+          <input id="g_description" value="${escapeHtml(desc)}" class="w-full border rounded px-2 py-2 mt-1" />
+        </div>
+      `;
+    }
+
+    function openAddModal(){
+      Swal.fire({
+        title: 'Nuevo gasto',
+        html: getFormHtml(),
+        focusConfirm: false,
+        didOpen: ()=>{ /* flatpickr could be init here if desired */ },
+        showCancelButton: true,
+        preConfirm: ()=> {
+          const date = document.getElementById('g_date').value;
+          const category = document.getElementById('g_category').value || 'Otros';
+          const amount = parseFloat(document.getElementById('g_amount').value) || 0;
+          const description = document.getElementById('g_description').value || '';
+          if(!date || amount <= 0){ Swal.showValidationMessage('Fecha y monto obligatorios, monto > 0'); return false; }
+          return { date, category, amount, description };
+        }
+      }).then(res=>{ if(res.isConfirmed && res.value){ addGasto(res.value); Swal.fire('Guardado','Gasto agregado','success'); } });
+    }
+
+    function openEditModal(id){
+      const g = gastos.find(x=>x.id===id); if(!g) return;
+      Swal.fire({
+        title: 'Editar gasto',
+        html: getFormHtml(g),
+        focusConfirm: false,
+        showCancelButton: true,
+        preConfirm: ()=> {
+          const date = document.getElementById('g_date').value;
+          const category = document.getElementById('g_category').value || 'Otros';
+          const amount = parseFloat(document.getElementById('g_amount').value) || 0;
+          const description = document.getElementById('g_description').value || '';
+          if(!date || amount <= 0){ Swal.showValidationMessage('Fecha y monto obligatorios, monto > 0'); return false; }
+          return { date, category, amount, description };
+        }
+      }).then(res=>{ if(res.isConfirmed && res.value){ updateGasto(id, res.value); Swal.fire('Actualizado','Gasto actualizado','success'); } });
+    }
+
+    function confirmDelete(id){
+      Swal.fire({ title:'¿Eliminar gasto?', text:'No se puede deshacer', icon:'warning', showCancelButton:true })
+        .then(r=>{ if(r.isConfirmed){ deleteGasto(id); Swal.fire('Eliminado','Registro borrado','success'); } });
+    }
+
+    // Charts
+    function updateCategoryChart(){
+      const data = getFilteredData();
+      const byCat = {};
+      data.forEach(d => { byCat[d.category] = (byCat[d.category] || 0) + Number(d.amount || 0); });
+      const labels = Object.keys(byCat);
+      const values = labels.map(l => byCat[l]);
+
+      if(window.Chart){
+        if(chartCategory) chartCategory.destroy();
+        chartCategory = new Chart(chartCatCtx, {
+          type: 'doughnut',
+          data: { labels, datasets: [{ data: values }] },
+          options: { plugins: { legend: { position: 'bottom' } }, maintainAspectRatio: false }
+        });
+      }
+    }
+
+    function updateTrendChart(){
+      const data = getFilteredData();
+      const days = {};
+      const today = new Date();
+      for(let i=29;i>=0;i--){ const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() - i); days[d.toISOString().slice(0,10)] = 0; }
+      data.forEach(d => { if(days.hasOwnProperty(d.date)) days[d.date] += Number(d.amount || 0); });
+      const labels = Object.keys(days);
+      const values = labels.map(k => days[k]);
+
+      if(window.Chart){
+        if(chartTrend) chartTrend.destroy();
+        chartTrend = new Chart(chartTrendCtx, {
+          type: 'bar',
+          data: { labels, datasets: [{ label: 'Gasto diario', data: values }] },
+          options: { plugins: { legend: { display: false } }, maintainAspectRatio: false }
+        });
+      }
+    }
+
+    // Export / Import Excel
+    function exportToExcel(){
+      const dataToExport = gastos.map(g => ({ Fecha: g.date, Categoria: g.category, Descripcion: g.description, Monto: Number(g.amount) }));
+      const ws = XLSX.utils.json_to_sheet(dataToExport);
+      const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Gastos');
+      const fileName = `gastos_export_${new Date().toISOString().slice(0,10)}.xlsx`;
+      XLSX.writeFile(wb, fileName);
+    }
+
+    function handleImport(e){
+      const file = e.target.files[0]; if(!file) return;
+      const reader = new FileReader();
+      reader.onload = function(evt){
+        try{
+          const data = evt.target.result;
+          const workbook = XLSX.read(data, { type: 'binary' });
+          const sheet = workbook.Sheets[workbook.SheetNames[0]];
+          const json = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+          const imported = json.map(r => ({ id: Date.now()+Math.floor(Math.random()*1000), date: r.Fecha || r.date || '', category: r.Categoria || r.category || 'Otros', description: r.Descripcion || r.description || '', amount: Number(r.Monto || r.monto || 0) })).filter(r => r.date && r.amount);
+          if(imported.length === 0){ Swal.fire('Importar','No se encontraron filas válidas. Asegúrate columnas Fecha y Monto.','info'); }
+          else{ gastos = gastos.concat(imported); save(); Swal.fire('Importado', `Se importaron ${imported.length} filas.`, 'success'); }
+        }catch(err){ Swal.fire('Error','No se pudo leer el archivo: '+err.message,'error'); }
+      };
+      reader.readAsBinaryString(file);
+      e.target.value = '';
+    }
+
+    // JSON backup / restore
+    function downloadJson(){
+      const blob = new Blob([JSON.stringify(gastos, null, 2)], { type: 'application/json' });
+      saveAs(blob, `gastos_backup_${new Date().toISOString().slice(0,10)}.json`);
+    }
+    function restoreFromJson(e){
+      const file = e.target.files[0]; if(!file) return;
+      const reader = new FileReader();
+      reader.onload = function(evt){
+        try{
+          const parsed = JSON.parse(evt.target.result);
+          if(Array.isArray(parsed)){ gastos = parsed; save(); Swal.fire('Restaurado','Datos restaurados desde JSON.','success'); } else { Swal.fire('Error','JSON inválido','error'); }
+        } catch(err){ Swal.fire('Error','No se pudo leer JSON: '+err.message,'error'); }
+      };
+      reader.readAsText(file);
+      e.target.value = '';
+    }
+
+    // Sample data
+    function loadSampleData(){
+      const sample = [
+        { date: dateOffset(-1), category: 'Alimentos', description: 'Supermercado', amount: 450.75 },
+        { date: dateOffset(-2), category: 'Transporte', description: 'Taxi', amount: 78.00 },
+        { date: dateOffset(-4), category: 'Ocio', description: 'Cine', amount: 120.50 },
+        { date: dateOffset(-7), category: 'Hogar', description: 'Luz', amount: 380.10 },
+        { date: dateOffset(-12), category: 'Salud', description: 'Farmacia', amount: 220.00 }
+      ];
+      sample.forEach(s=> s.id = Date.now()+Math.floor(Math.random()*10000));
+      gastos = gastos.concat(sample);
+      save();
+      Swal.fire('Ejemplo','Datos de ejemplo agregados','success');
+    }
+    function dateOffset(days){ const d=new Date(); d.setDate(d.getDate()+days); return d.toISOString().slice(0,10); }
+
+    // Utility
+    function escapeHtml(str){ if(!str && str!==0) return ''; return String(str).replace(/[&<>"']/g, function(m){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[m]; }); }
+
+    // Initial render
+    renderAll();
+
+    // Expose small debug helpers
+    window._controlGastos = { getState: ()=>gastos, clear: ()=>{ gastos=[]; save(); } };
+
+  })();
+  </script>
+</body>
+</html>
